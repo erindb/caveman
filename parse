@@ -1,0 +1,6 @@
+#!/bin/bash
+
+cd corenlp
+annotators=${2:-"tokenize,ssplit,pos,parse,depparse,coref"}
+output="$(wget --post-data '$1' 'localhost:9000/?properties={\"tokenize.whitespace\":\"true\",\"annotators\":\"'$annotators'\",\"outputFormat\":\"json\"}' -O -)"
+echo $output
