@@ -33,6 +33,8 @@ Or
 
 (The optional second argument is the annotators. the default for the second argument is `"tokenize,ssplit,pos,parse,depparse"`)
 
-And then to do some re-munging of the sentence to create the caveman version,
+And then to do some re-munging of the sentence to create the caveman version, while the server is running,
 
-	./caveman.py "the sentence you want to parse"
+	./caveman.py "the sentence(s) you want to parse"
+
+To exit the server, Cntl-c.

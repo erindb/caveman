@@ -59,7 +59,7 @@ def getDependentsOf(index, dependencies, link=None):
 		dependencies
 	)
 	if link:
-		candidates = filter(lambda d: d["dep"]==link, candidates)
+		candidates = filter(lambda d: re.search(link, d["dep"]), candidates)
 	return map(
 		lambda d: fixIndex(d["dependent"]),
 		candidates
@@ -67,7 +67,7 @@ def getDependentsOf(index, dependencies, link=None):
 
 def searchDependencyLayer(roots, startIndex, endIndex, sentence):
 	tokens = sentence["tokens"]
-	dependencies = sentence["basic-dependencies"]
+	dependencies = sentence["collapsed-dependencies"]
 	newRoots = []
 	for root in roots:
 		topLayerDeps = getDependentsOf(root, dependencies)
@@ -137,7 +137,7 @@ def hasDepLink(index, dependencies, link):
 	return len(deps) > 0
 
 def getMainPred(sentence):
-	dependencies = sentence["basic-dependencies"]
+	dependencies = sentence["collapsed-dependencies"]
 	wordIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
 	isPassive = hasDepLink(wordIndex, dependencies, "nsubjpass")
 	token = sentence["tokens"][wordIndex]
@@ -146,14 +146,65 @@ def getMainPred(sentence):
 	else:
 		return lemma(token)
 
-def getSubject(sentence):
-	dependencies = sentence["basic-dependencies"]
+def getSubjIndex(dependencies):
 	predIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
-	wordIndex = (getDependentsOf(predIndex, dependencies, "nsubj") + getDependentsOf(predIndex, dependencies, "nsubjpass"))[0]
-	return lemma(sentence["tokens"][wordIndex])
+	possibleIndices = getDependentsOf(predIndex, dependencies, "nsubj") + getDependentsOf(predIndex, dependencies, "nsubjpass")
+	if len(possibleIndices)>0:
+		wordIndex = possibleIndices[0]
+	else:
+		return None
+
+def getSubject(sentence):
+	dependencies = sentence["collapsed-dependencies"]
+	wordIndex = getSubjIndex(dependencies)
+	if wordIndex:
+		return lemma(sentence["tokens"][wordIndex])
+	else:
+		return None
+
+def getNegation(sentence):
+	dependencies = sentence["collapsed-dependencies"]
+	predIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
+	possibleIndices = getDependentsOf(predIndex, dependencies, "neg")
+	if len(possibleIndices)>0:
+		wordIndex = possibleIndices[0]
+		return lemma(sentence["tokens"][wordIndex])
+	else:
+		return None
+
+def getPreposition(sentence):
+	dependencies = sentence["collapsed-dependencies"]
+	predIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
+	subjIndex = getSubjIndex(dependencies)
+	possibleIndices = getDependentsOf(predIndex, dependencies, "nmod|iobj")
+	if (subjIndex):
+		possibleIndices += getDependentsOf(subjIndex, dependencies, "nmod|iobj")
+	if len(possibleIndices)>0:
+		wordIndex = possibleIndices[0]
+		candidates = filter(lambda d: d["dependent"]==breakIndex(wordIndex), dependencies)
+		link = candidates[0]["dep"]
+		if re.search("nmod:", link):
+			return link[5:]
+		else:
+			return "to"
+	else:
+		return None
+
+def getPrepositionalNoun(sentence):
+	dependencies = sentence["collapsed-dependencies"]
+	predIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
+	subjIndex = getSubjIndex(dependencies)
+	possibleIndices = getDependentsOf(predIndex, dependencies, "nmod|iobj")
+	if (subjIndex):
+		possibleIndices += getDependentsOf(subjIndex, dependencies, "nmod|iobj")
+	if len(possibleIndices)>0:
+		wordIndex = possibleIndices[0]
+		return lemma(sentence["tokens"][wordIndex])
+	else:
+		return None
 
 def getObject(sentence):
-	dependencies = sentence["basic-dependencies"]
+	dependencies = sentence["collapsed-dependencies"]
 	predIndex = getDependentsOf(-1, dependencies, link="ROOT")[0]
 	possibleObjIndices = getDependentsOf(predIndex, dependencies, link="dobj")
 	if len(possibleObjIndices) > 0:
@@ -166,8 +217,11 @@ def cavemanText(cavemanData):
 			lambda x: x!=None,
 			[
 				sentence["subj"],
+				sentence["negation"],
 				sentence["pred"],
 				sentence["dobj"],
+				sentence["prep"],
+				sentence["prepN"],
 				sentence["finalPunctuation"]
 			]
 		)))
@@ -182,13 +236,16 @@ def getFinalPunctuation(sentence):
 	return "."
 
 def collectCavemanComponents(cavemanData, sentences):
-	# girl not think boy not give banana monkey
+	# girl (not think boy not) give banana monkey
 	cavemanData["sentences"] = []
 	for sentence in sentences:
 		sentenceData = {}
+		sentenceData["negation"] = getNegation(sentence)
 		sentenceData["pred"] = getMainPred(sentence)
 		sentenceData["subj"] = getSubject(sentence)
 		sentenceData["dobj"] = getObject(sentence)
+		sentenceData["prep"] = getPreposition(sentence)
+		sentenceData["prepN"] = getPrepositionalNoun(sentence)
 		sentenceData["finalPunctuation"] = getFinalPunctuation(sentence)
 		cavemanData["sentences"].append(sentenceData)
 	cavemanData["caveman"] = cavemanText(cavemanData)
